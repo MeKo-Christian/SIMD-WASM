@@ -35,4 +35,5 @@ if (withKernel) {
   kernel = inst.exports;
 }
 
-wasi.start(app);
+const code = wasi.start(app);
+if (code) process.exit(code);

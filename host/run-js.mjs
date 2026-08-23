@@ -12,6 +12,8 @@ const goroot = execFileSync('go', ['env', 'GOROOT'], { encoding: 'utf8' }).trim(
 createRequire(import.meta.url)(join(goroot, 'lib', 'wasm', 'wasm_exec.js'));
 
 const go = new Go();
+// wasm_exec.js only warns on a non-zero exit; make it fail the process.
+go.exit = (code) => { if (code !== 0) process.exit(code); };
 let kernel = null;
 go.importObject.gosimd = {
   dot_f32: (a, b, n) => kernel.dot_f32(a, b, n),

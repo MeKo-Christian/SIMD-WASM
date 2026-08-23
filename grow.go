@@ -11,7 +11,7 @@ import (
 // the kernel module was instantiated against it, then re-runs a kernel. The
 // kernel imports the *same* WebAssembly.Memory object, so growth is shared and
 // its view stays valid -- this is what makes the shared-memory design safe.
-func checkAfterGrowth() {
+func checkAfterGrowth() bool {
 	ballast := make([][]float32, 0, 64)
 	for i := 0; i < 64; i++ {
 		ballast = append(ballast, make([]float32, 1<<18)) // ~64 MiB total
@@ -21,9 +21,14 @@ func checkAfterGrowth() {
 		a[i] = 1
 	}
 	got, want := simd.Dot(a, a), simd.ScalarDot(a, a)
-	status := "ok  "
-	if math.Abs(float64(got-want)) > float64(want)*1e-5 {
-		status = "FAIL"
+	ok := math.Abs(float64(got-want)) <= float64(want)*1e-5
+	fmt.Printf("%s Dot after ~64MiB memory growth: %v ~= %v\n", status(ok), got, want)
+	return ok
+}
+
+func status(ok bool) string {
+	if ok {
+		return "ok  "
 	}
-	fmt.Printf("%s Dot after ~64MiB memory growth: %v ~= %v\n", status, got, want)
+	return "FAIL"
 }
