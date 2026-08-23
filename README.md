@@ -72,6 +72,7 @@ just run         # wasip1, SIMD
 just run-plain   # wasip1, pure-Go fallback
 just run-js      # GOOS=js under Node
 just serve       # browser demo on :8080
+just site        # same demo as a static directory, ready for any host
 just test        # native tests of the fallback path
 just verify      # assert the built modules are what they claim to be
 just             # every recipe, with descriptions
@@ -114,6 +115,18 @@ cmd/serve           static server for the browser demo
 - **128-bit only.** wasm SIMD has no AVX-class width, and no runtime feature
   detection here — a host without simd128 fails at kernel instantiation, so
   fall back by simply not wiring the import.
+
+## The demo on the web
+
+`.github/workflows/build-deploy-web.yaml` publishes the browser demo to GitHub
+Pages on every push to `main`: it runs `just site`, which drops `host/index.html`,
+`build/app-simd-js.wasm`, `build/kernel.wasm` and Go's `wasm_exec.js` into one
+flat directory, and uploads that as the Pages artifact. `cmd/serve` has no part
+in it — Pages serves static files only, and everything the page needs is a plain
+fetch of a file next to it.
+
+It only works once Pages is enabled for the repository with **Source: GitHub
+Actions** (Settings → Pages); until then the deploy job fails with a 404.
 
 ## Continuous integration
 

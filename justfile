@@ -26,7 +26,7 @@ build: kernel
 
 # Remove all build artifacts
 clean:
-    rm -rf build/
+    rm -rf build/ site/
 
 #################################
 # Run
@@ -47,6 +47,17 @@ run-js: build
 # Serve the browser demo
 serve addr="localhost:8080": build
     go run ./cmd/serve -addr {{ addr }}
+
+# Assemble the browser demo into a flat directory any static host can serve
+site out="site": build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{ out }}"
+    mkdir -p "{{ out }}"
+    cp host/index.html "{{ out }}/"
+    cp build/app-simd-js.wasm build/kernel.wasm "{{ out }}/"
+    cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" "{{ out }}/"
+    ls -l "{{ out }}"
 
 #################################
 # Checks
