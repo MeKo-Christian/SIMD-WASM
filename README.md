@@ -107,6 +107,19 @@ cmd/serve           static server for the browser demo
   detection here — a host without simd128 fails at kernel instantiation, so
   fall back by simply not wiring the import.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` installs Go, clang and `wasm-ld`, then runs the
+whole thing on Ubuntu: gofmt, `go vet` both natively and under the wasm build
+tags (which is what checks the `//go:wasmimport` pointer rules), the native
+tests, a full build, and all three demo variants.
+
+The demo exits non-zero when a check fails, so a wrong kernel breaks the
+build rather than printing `FAIL` into a green log. CI additionally asserts
+that the kernel really carries the `simd128` target feature, that the tagged
+build reports its kernels as linked, and that the untagged build contains no
+`gosimd` import at all.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

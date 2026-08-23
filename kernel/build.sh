@@ -4,5 +4,5 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 clang --target=wasm32 -msimd128 -O3 -nostdlib -ffreestanding \
-	-Wl,--no-entry -Wl,--import-memory -Wl,--strip-all \
+	-Wl,--no-entry -Wl,--import-memory \
 	-o ../build/kernel.wasm kernel.c
