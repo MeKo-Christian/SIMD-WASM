@@ -19,7 +19,13 @@ enable = ['gomodguard_v2', 'wsl_v5']
 
 [linters.settings]
 [linters.settings.varnamelen]
-ignore-names = ['n', 'x', 'y', 'p', 'a', 'b', 'i', 's', 'v', 'f', 'ok']
+# Grid and stencil code: w/h, dx/dy, px/py, r2 and the neighbour rows up/dn are
+# the conventional names in this domain. Spelling them out makes the Laplacian
+# harder to read, not easier.
+ignore-names = [
+  'n', 'x', 'y', 'p', 'a', 'b', 'i', 's', 'v', 'f', 'ok',
+  'w', 'h', 'c', 'g', 'o', 't', 'dx', 'dy', 'px', 'py', 'r2', 'up', 'dn', 'at',
+]
 ignore-decls = ['w http.ResponseWriter', 'r *http.Request']
 
 [linters.settings.wsl_v5]
@@ -37,12 +43,12 @@ paths = ['third_party$', 'builtin$', 'examples$']
 # random test data needs no crypto, and the benchmark sink must be a global.
 [[linters.exclusions.rules]]
 linters = ['forbidigo', 'gochecknoglobals', 'gochecknoinits']
-path = '^(main|grow)\.go$'
+path = '^(main|grow|wave_check|interactive_js)\.go$'
 
 [[linters.exclusions.rules]]
 linters = ['gosec']
 text = 'G404:'
-path = '^main\.go$'
+path = '(^main\.go$|_test\.go$)'
 
 # Lengths are computed on the Go side and always fit; see simd/kernels_wasm.go.
 [[linters.exclusions.rules]]

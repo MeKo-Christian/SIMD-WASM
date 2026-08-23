@@ -21,9 +21,9 @@ func checkWave() bool {
 		tol = 1e-4
 	)
 
-	fields := make([][]float32, 0, len(sim.Backends))
+	fields := make([][]float32, 0, len(sim.Backends()))
 
-	for _, b := range sim.Backends {
+	for _, b := range sim.Backends() {
 		s := sim.NewWave(w, h)
 		s.Poke(w/3, h/2, 1)
 		s.Poke(2*w/3, h/3, -1)
@@ -45,7 +45,7 @@ func checkWave() bool {
 
 		if worst > tol {
 			fmt.Printf("FAIL Wave %s vs %s: max delta %v at cell %d\n",
-				sim.Backends[i], sim.Backends[0], worst, at)
+				sim.Backends()[i], sim.Backends()[0], worst, at)
 
 			ok = false
 
@@ -53,7 +53,7 @@ func checkWave() bool {
 		}
 
 		fmt.Printf("%s Wave %-8s matches %s after %d steps (max delta %.2e)\n",
-			status(true), sim.Backends[i].String(), sim.Backends[0], steps, worst)
+			status(true), sim.Backends()[i].String(), sim.Backends()[0], steps, worst)
 	}
 
 	return ok

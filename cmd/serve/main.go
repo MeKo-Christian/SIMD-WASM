@@ -24,6 +24,7 @@ func main() {
 		log.Fatal(err)
 	}
 	build := filepath.Join(root, "build")
+	host := filepath.Join(root, "host")
 
 	goroot, err := exec.CommandContext(context.Background(), "go", "env", "GOROOT").Output()
 	if err != nil {
@@ -36,9 +37,20 @@ func main() {
 		w.Header().Set("Content-Type", "text/javascript")
 		http.ServeFile(w, r, glue)
 	})
+	// `just site` flattens host/ and build/ into one directory, so serve them
+	// as one here too: the page's relative fetches must resolve the same way in
+	// development as they do on Pages.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			http.ServeFile(w, r, filepath.Join(root, "host", "index.html"))
+			http.ServeFile(w, r, filepath.Join(host, "index.html"))
+			return
+		}
+
+		name := filepath.Join(host, filepath.Base(r.URL.Path))
+
+		_, statErr := os.Stat(name)
+		if statErr == nil {
+			http.ServeFile(w, r, name)
 			return
 		}
 

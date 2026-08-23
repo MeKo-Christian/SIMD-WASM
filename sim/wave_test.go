@@ -1,10 +1,11 @@
-package sim
+package sim_test
 
 import (
 	"math"
 	"math/rand/v2"
 	"testing"
 
+	"github.com/MeKo-Christian/simd-wasm/sim"
 	"github.com/MeKo-Christian/simd-wasm/simd"
 )
 
@@ -52,9 +53,9 @@ func TestScalarWaveStepMatchesReference(t *testing.T) {
 func TestWaveBorderStaysZero(t *testing.T) {
 	t.Parallel()
 
-	s := NewWave(24, 20)
+	s := sim.NewWave(24, 20)
 	s.Poke(12, 10, 1)
-	s.Step(BackendGo, 40)
+	s.Step(sim.BackendGo, 40)
 
 	f := s.Field()
 	for y := range s.H {
@@ -80,17 +81,28 @@ func TestWaveStaysSymmetric(t *testing.T) {
 
 	const n = 41
 
-	s := NewWave(n, n)
+	s := sim.NewWave(n, n)
 	s.Poke(n/2, n/2, 1)
-	s.Step(BackendGo, 60)
+	s.Step(sim.BackendGo, 60)
 
 	f := s.Field()
+
+	// Scale the tolerance to the field's peak, not to each cell: a cell whose
+	// own value is near zero is all rounding noise, and a relative test there
+	// measures nothing.
+	var peak float64
+	for _, v := range f {
+		peak = math.Max(peak, math.Abs(float64(v)))
+	}
+
+	tol := 1e-5 * peak
+
 	for y := range n {
 		for x := range n {
 			v := f[y*n+x]
 			for _, m := range [][2]int{{n - 1 - x, y}, {x, n - 1 - y}, {y, x}} {
 				got := f[m[1]*n+m[0]]
-				if math.Abs(float64(got-v)) > 1e-4*math.Abs(float64(v))+1e-9 {
+				if math.Abs(float64(got-v)) > tol {
 					t.Fatalf("(%d, %d)=%v not mirrored at (%d, %d)=%v", x, y, v, m[0], m[1], got)
 				}
 			}
@@ -103,9 +115,9 @@ func TestWaveStaysSymmetric(t *testing.T) {
 func TestWaveIsStable(t *testing.T) {
 	t.Parallel()
 
-	s := NewWave(64, 64)
+	s := sim.NewWave(64, 64)
 	s.Poke(32, 32, 1)
-	s.Step(BackendGo, 20)
+	s.Step(sim.BackendGo, 20)
 
 	energy := func() float64 {
 		var e float64
@@ -118,7 +130,7 @@ func TestWaveIsStable(t *testing.T) {
 
 	start := energy()
 
-	s.Step(BackendGo, 4000)
+	s.Step(sim.BackendGo, 4000)
 
 	end := energy()
 	if math.IsNaN(end) || math.IsInf(end, 0) {
@@ -136,10 +148,10 @@ func TestWaveIsStable(t *testing.T) {
 func TestBackendsAgree(t *testing.T) {
 	t.Parallel()
 
-	fields := make([][]float32, 0, len(Backends))
+	fields := make([][]float32, 0, len(sim.Backends()))
 
-	for _, b := range Backends {
-		s := NewWave(48, 32)
+	for _, b := range sim.Backends() {
+		s := sim.NewWave(48, 32)
 		s.Poke(20, 16, 1)
 		s.Step(b, 50)
 		fields = append(fields, append([]float32(nil), s.Field()...))
@@ -149,7 +161,7 @@ func TestBackendsAgree(t *testing.T) {
 		for j := range fields[i] {
 			if fields[i][j] != fields[0][j] {
 				t.Fatalf("%v differs from %v at %d: %v vs %v",
-					Backends[i], Backends[0], j, fields[i][j], fields[0][j])
+					sim.Backends()[i], sim.Backends()[0], j, fields[i][j], fields[0][j])
 			}
 		}
 	}

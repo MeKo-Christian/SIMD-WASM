@@ -1,56 +1,435 @@
 <!doctype html>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Go + WebAssembly SIMD</title>
 <style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262b36;
+    --fg: #e6e9ef;
+    --dim: #8b93a3;
+    --accent: #ffb030;
+    --cool: #3894ff;
+  }
+  * {
+    box-sizing: border-box;
+  }
   body {
     font:
       14px/1.6 ui-monospace,
       SFMono-Regular,
       Menlo,
       monospace;
-    margin: 2rem auto;
-    max-width: 46rem;
+    margin: 0;
+    padding: 2rem 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
   }
-  pre {
-    background: #f5f5f5;
-    padding: 1rem;
-    border-radius: 6px;
-    white-space: pre-wrap;
+  main {
+    max-width: 76rem;
+    margin: 0 auto;
   }
   h1 {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
+    margin: 0 0 0.25rem;
+  }
+  p.lede {
+    color: var(--dim);
+    margin: 0 0 1.5rem;
+    max-width: 60rem;
+  }
+  nav {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1.25rem;
+  }
+  nav button {
+    font: inherit;
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--dim);
+    padding: 0.5rem 0.9rem;
+    cursor: pointer;
+  }
+  nav button[aria-selected="true"] {
+    color: var(--fg);
+    border-bottom-color: var(--accent);
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    color: var(--dim);
+  }
+  .controls label {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  select,
+  button.action {
+    font: inherit;
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+  }
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.75rem;
+  }
+  .panel.disabled {
+    opacity: 0.4;
+  }
+  .panel h2 {
+    font-size: 0.95rem;
+    margin: 0 0 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .panel h2 .speedup {
+    color: var(--accent);
+  }
+  canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 4px;
+    background: #000;
+    image-rendering: pixelated;
+    cursor: crosshair;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 0.75rem;
+    margin-top: 0.6rem;
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  .stats b {
+    color: var(--fg);
+    font-weight: normal;
+    text-align: right;
+  }
+  .bar {
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+  .bar > div {
+    height: 100%;
+    background: var(--accent);
+    width: 0;
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 1rem;
+    border-radius: 8px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .note {
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  .error {
+    background: #2a1416;
+    border: 1px solid #6b2b31;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin: 0 0 1.25rem;
+    white-space: pre-wrap;
+  }
+  [hidden] {
+    display: none !important;
   }
 </style>
-<h1>SIMD kernels called from standard-Go WebAssembly</h1>
-<pre id="out">running…</pre>
+
+<main>
+  <h1>SIMD kernels called from standard-Go WebAssembly</h1>
+  <p class="error" id="error" hidden></p>
+  <p class="lede">
+    One Go module, three backends, identical data. <b>Go</b> is the pure-Go loop
+    the stock toolchain emits for wasm. <b>C</b> is the same kernel compiled by
+    clang without <code>simd128</code>. <b>C&nbsp;+&nbsp;SIMD</b> is that same C
+    source with <code>-msimd128</code>. The middle column is the point:
+    <em>vs C</em> is what SIMD actually won, <em>vs Go</em> also counts clang
+    out-compiling Go's wasm backend.
+  </p>
+
+  <nav>
+    <button data-tab="wave" aria-selected="true">Wave</button>
+    <button data-tab="bench" aria-selected="false">Microbench</button>
+  </nav>
+
+  <section data-panel="wave">
+    <div class="controls">
+      <label>
+        mode
+        <select id="mode">
+          <option value="equal-time">equal time — same ms, count steps</option>
+          <option value="equal-work">
+            equal work — same steps, measure ms
+          </option>
+        </select>
+      </label>
+      <label>
+        grid
+        <select id="grid">
+          <option value="256">256 × 256</option>
+          <option value="384" selected>384 × 384</option>
+          <option value="512">512 × 512</option>
+          <option value="768">768 × 768</option>
+        </select>
+      </label>
+      <button class="action" id="reset">reset</button>
+      <span class="note"
+        >click a pond to drop a stone — it lands in all three</span
+      >
+    </div>
+    <div class="panels" id="panels"></div>
+    <p class="note" id="waveNote"></p>
+  </section>
+
+  <section data-panel="bench" hidden>
+    <div class="controls">
+      <button class="action" id="runBench">run benchmarks</button>
+      <span class="note"
+        >a few seconds; each kernel is timed on every backend</span
+      >
+    </div>
+    <pre id="out">running…</pre>
+  </section>
+</main>
+
 <script src="wasm_exec.js"></script>
 <script type="module">
+  import { KERNEL_MODULES, kernelImports } from "./kernels.mjs";
+
   const out = document.getElementById("out");
   out.textContent = "";
+
+  // Go writes its checks and the benchmark table to stdout; wasm_exec.js turns
+  // that into console.log, so the Microbench tab is just a mirror of it.
   const log = console.log;
   console.log = (...a) => {
     out.textContent += a.join(" ") + "\n";
+    out.scrollTop = out.scrollHeight;
     log(...a);
   };
 
-  const go = new Go();
-  let kernel = null;
-  // Trampolines: resolved before _start runs, so the indirection is set up by
-  // the time Go calls into them.
-  go.importObject.gosimd = {
-    dot_f32: (a, b, n) => kernel.dot_f32(a, b, n),
-    add_f32: (dst, a, b, n) => kernel.add_f32(dst, a, b, n),
-  };
+  // ---- tabs ---------------------------------------------------------------
+  for (const btn of document.querySelectorAll("nav button")) {
+    btn.addEventListener("click", () => {
+      for (const other of document.querySelectorAll("nav button")) {
+        other.setAttribute("aria-selected", String(other === btn));
+      }
+      for (const sec of document.querySelectorAll("section[data-panel]")) {
+        sec.hidden = sec.dataset.panel !== btn.dataset.tab;
+      }
+    });
+  }
 
-  const app = await WebAssembly.instantiateStreaming(
-    fetch("app-simd-js.wasm"),
-    go.importObject,
-  );
-  // The kernel module imports Go's own linear memory, so it reads and writes
-  // Go slices in place -- no copying across the boundary.
-  const k = await WebAssembly.instantiateStreaming(fetch("kernel.wasm"), {
-    env: { memory: app.instance.exports.mem },
+  // Nothing on this page works without all three modules, so a load failure is
+  // reported rather than left as a blank frame. The most likely cause is a
+  // stale deployment missing kernel-scalar.wasm.
+  function fail(err) {
+    const el = document.getElementById("error");
+    el.hidden = false;
+    el.textContent = `Could not start the demo: ${err.message ?? err}`;
+    for (const sec of document.querySelectorAll("section[data-panel]")) {
+      sec.hidden = true;
+    }
+    throw err;
+  }
+
+  // ---- wasm wiring --------------------------------------------------------
+  // Go and the kernel modules import each other, so Go's imports are
+  // trampolines resolved between instantiating Go and starting it. Both kernel
+  // modules import Go's own linear memory and so read and write Go slices in
+  // place -- no copying across the boundary.
+  const go = new Go();
+  go.argv = ["app", "-interactive"];
+
+  const holders = KERNEL_MODULES.map(({ importName, file }) => {
+    const { holder, imports } = kernelImports();
+    go.importObject[importName] = imports;
+
+    return { file, holder };
   });
-  kernel = k.instance.exports;
-  await go.run(app.instance);
+
+  let app;
+  try {
+    app = await WebAssembly.instantiateStreaming(
+      fetch("app-simd-js.wasm"),
+      go.importObject,
+    );
+
+    for (const k of holders) {
+      const inst = await WebAssembly.instantiateStreaming(fetch(k.file), {
+        env: { memory: app.instance.exports.mem },
+      });
+      k.holder.exports = inst.instance.exports;
+    }
+  } catch (err) {
+    fail(err);
+  }
+
+  // Go blocks in select{} once it is up, so go.run() never resolves; it calls
+  // simdwasmReady instead to hand control back to the page.
+  const started = new Promise((resolve) => {
+    globalThis.simdwasmReady = resolve;
+  });
+  go.run(app.instance);
+  await started;
+
+  // ---- benchmarks tab -----------------------------------------------------
+  const runBench = document.getElementById("runBench");
+  runBench.addEventListener("click", () => {
+    runBench.disabled = true;
+    runBench.textContent = "running…";
+    // Yield first: simdwasmBench blocks the main thread for seconds, and the
+    // button state should be painted before it does.
+    setTimeout(() => {
+      console.log("");
+      globalThis.simdwasmBench();
+      runBench.disabled = false;
+      runBench.textContent = "run benchmarks";
+    }, 50);
+  });
+
+  // ---- wave tab -----------------------------------------------------------
+  const info = globalThis.simdwasmInfo();
+  const panelsEl = document.getElementById("panels");
+  const modeEl = document.getElementById("mode");
+  const gridEl = document.getElementById("grid");
+
+  document.getElementById("waveNote").textContent = info.simd
+    ? "2D wave equation, float32, 5-point Laplacian stencil — the same stencil algo-pde uses, stepped explicitly."
+    : "SIMD kernels are not linked in this build; every column is running the pure-Go loop.";
+
+  // Per-frame budget in equal-time mode, and steps per frame in equal-work.
+  // Both are chosen so three panels still leave room to paint at ~60fps.
+  const BUDGET_MS = 6;
+  const EQUAL_WORK_STEPS = 8;
+  const COLOR_SCALE = 6;
+
+  const panels = info.backends.map((name, i) => {
+    const el = document.createElement("div");
+    el.className = "panel";
+    el.innerHTML = `
+      <h2><span>${name}</span><span class="speedup"></span></h2>
+      <canvas></canvas>
+      <div class="stats">
+        <span>steps/s</span><b class="rate">–</b>
+        <span>ms/step</span><b class="per">–</b>
+        <span>total steps</span><b class="total">–</b>
+      </div>
+      <div class="bar"><div></div></div>`;
+    panelsEl.appendChild(el);
+
+    const canvas = el.querySelector("canvas");
+    canvas.addEventListener("click", (ev) => {
+      const r = canvas.getBoundingClientRect();
+      const x = Math.round(((ev.clientX - r.left) / r.width) * canvas.width);
+      const y = Math.round(((ev.clientY - r.top) / r.height) * canvas.height);
+      globalThis.simdwasmPoke(x, y);
+    });
+
+    return {
+      index: i,
+      el,
+      canvas,
+      ctx: canvas.getContext("2d"),
+      speedup: el.querySelector(".speedup"),
+      rate: el.querySelector(".rate"),
+      per: el.querySelector(".per"),
+      total: el.querySelector(".total"),
+      bar: el.querySelector(".bar > div"),
+      image: null,
+      bytes: null,
+      // Exponentially smoothed, so the readouts are legible instead of jittering.
+      msPerStep: 0,
+    };
+  });
+
+  function resize(size) {
+    globalThis.simdwasmInit(size, size);
+    for (const p of panels) {
+      p.canvas.width = size;
+      p.canvas.height = size;
+      p.image = p.ctx.createImageData(size, size);
+      p.bytes = new Uint8Array(p.image.data.buffer);
+      p.msPerStep = 0;
+    }
+  }
+
+  resize(Number(gridEl.value));
+  gridEl.addEventListener("change", () => resize(Number(gridEl.value)));
+  document.getElementById("reset").addEventListener("click", () => {
+    globalThis.simdwasmReset();
+    for (const p of panels) p.msPerStep = 0;
+  });
+
+  // Fixed to en-US: the page is English, and a locale that groups with "."
+  // would render 2379 steps/s as "2.379" right next to "0.420" ms/step.
+  const group = new Intl.NumberFormat("en-US");
+  const fmt = (v, digits = 2) =>
+    v >= 1000 ? group.format(Math.round(v)) : v.toFixed(digits);
+
+  function frame() {
+    const mode = modeEl.value;
+    const budget = mode === "equal-work" ? EQUAL_WORK_STEPS : BUDGET_MS;
+
+    for (const p of panels) {
+      // Time from JS, around the whole call, so the trampoline crossing into
+      // the kernel module is counted rather than hidden.
+      const t0 = performance.now();
+      const r = globalThis.simdwasmStep(p.index, mode, budget);
+      const ms = performance.now() - t0;
+
+      const per = ms / Math.max(1, r.steps);
+      p.msPerStep = p.msPerStep === 0 ? per : p.msPerStep * 0.85 + per * 0.15;
+      p.lastSteps = r.steps;
+      p.lastMs = ms;
+      p.totalSteps = r.total;
+
+      globalThis.simdwasmRender(p.index, p.bytes, COLOR_SCALE);
+      p.ctx.putImageData(p.image, 0, 0);
+    }
+
+    const slowest = Math.max(...panels.map((p) => p.msPerStep));
+
+    for (const p of panels) {
+      p.rate.textContent = fmt(1000 / p.msPerStep, 0);
+      p.per.textContent = fmt(p.msPerStep, 3);
+      p.total.textContent = group.format(p.totalSteps);
+      p.speedup.textContent =
+        p.msPerStep > 0 ? `${(slowest / p.msPerStep).toFixed(2)}×` : "";
+      p.bar.style.width = `${Math.min(100, (p.lastMs / (BUDGET_MS * 2)) * 100)}%`;
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
 </script>

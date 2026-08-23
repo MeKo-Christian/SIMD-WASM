@@ -18,6 +18,19 @@ const (
 	modeEqualWork = "equal-work" // same step count, measure the time
 )
 
+// Driver settings for the browser demo. The frequencies are in cycles per
+// step, low enough that the emitted wavelength spans tens of cells -- a faster
+// drive just makes grid-scale noise. Each source emits for driveBurst steps
+// out of every drivePeriod, so the ponds fill with expanding rings whose radii
+// show at a glance how far each backend has got.
+const (
+	driveFreqA  = 0.02
+	driveFreqB  = 0.025
+	driveAmpl   = 0.6
+	driveBurst  = 50
+	drivePeriod = 900
+)
+
 // panels holds one independent simulation per backend. They are stepped from
 // identical state, so in equal-work mode all three render the same picture --
 // a correctness check you can see -- and in equal-time mode the faster ones
@@ -36,6 +49,7 @@ func serveInteractive() {
 	global.Set("simdwasmPoke", js.FuncOf(pokeFn))
 	global.Set("simdwasmStep", js.FuncOf(stepFn))
 	global.Set("simdwasmRender", js.FuncOf(renderFn))
+	global.Set("simdwasmBench", js.FuncOf(benchFn))
 
 	// The page waits for this rather than racing go.run().
 	if ready := global.Get("simdwasmReady"); ready.Type() == js.TypeFunction {
@@ -45,9 +59,19 @@ func serveInteractive() {
 	select {}
 }
 
+// benchFn runs the benchmark table on demand. Its output goes to stdout, which
+// the page is already capturing, so the Microbench tab fills in as it runs --
+// and it is not on the page-load path, where several seconds of timing loops
+// would just look like a hang.
+func benchFn(js.Value, []js.Value) any {
+	benchmarks()
+
+	return nil
+}
+
 func infoFn(js.Value, []js.Value) any {
-	names := make([]any, len(sim.Backends))
-	for i, b := range sim.Backends {
+	names := make([]any, len(sim.Backends()))
+	for i, b := range sim.Backends() {
 		names[i] = b.String()
 	}
 
@@ -63,12 +87,13 @@ func infoFn(js.Value, []js.Value) any {
 func initFn(_ js.Value, args []js.Value) any {
 	w, h := args[0].Int(), args[1].Int()
 
-	panels = make([]*sim.Wave, len(sim.Backends))
+	panels = make([]*sim.Wave, len(sim.Backends()))
 	for i := range panels {
 		panels[i] = sim.NewWave(w, h)
+		// Two off-centre sources, pulsed, at slightly different frequencies.
+		panels[i].Drive(w/3, h/2, driveFreqA, driveAmpl, driveBurst, drivePeriod)
+		panels[i].Drive(2*w/3, 2*h/3, driveFreqB, driveAmpl, driveBurst, drivePeriod)
 	}
-
-	pokeAll(w/2, h/2, 1)
 
 	return nil
 }
@@ -76,10 +101,6 @@ func initFn(_ js.Value, args []js.Value) any {
 func resetFn(js.Value, []js.Value) any {
 	for _, p := range panels {
 		p.Reset()
-	}
-
-	if len(panels) > 0 {
-		pokeAll(panels[0].W/2, panels[0].H/2, 1)
 	}
 
 	return nil
@@ -108,7 +129,7 @@ func stepFn(_ js.Value, args []js.Value) any {
 		return nil
 	}
 
-	p, b := panels[i], sim.Backends[i]
+	p, b := panels[i], sim.Backends()[i]
 	mode, budget := args[1].String(), args[2].Float()
 
 	var (

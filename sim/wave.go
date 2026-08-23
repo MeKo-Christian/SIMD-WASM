@@ -2,7 +2,11 @@
 // kept out of the wasm-only glue so `go test` can exercise them natively.
 package sim
 
-import "github.com/MeKo-Christian/simd-wasm/simd"
+import (
+	"math"
+
+	"github.com/MeKo-Christian/simd-wasm/simd"
+)
 
 // Backend selects which implementation of a kernel a step runs on. All three
 // live in one binary, so the demo can race them against identical state.
@@ -31,8 +35,8 @@ func (b Backend) String() string {
 	}
 }
 
-// Backends is every backend, in display order.
-var Backends = []Backend{BackendGo, BackendC, BackendSIMD}
+// Backends returns every backend, in display order.
+func Backends() []Backend { return []Backend{BackendGo, BackendC, BackendSIMD} }
 
 // Wave is a 2D explicit finite-difference wave equation on a w*h grid: a pond
 // you can drop stones into. The stencil is the 5-point discrete Laplacian, the
@@ -48,6 +52,28 @@ type Wave struct {
 
 	cur, prev, next []float32
 	steps           int
+	drivers         []driver
+}
+
+// A driver is a cell held oscillating: a loudspeaker in the pond. Without one,
+// a damped pond is only interesting for as long as the last splash takes to
+// die -- and the fastest backend, being furthest ahead, would go flat first,
+// which is exactly backwards for a demo about speed.
+//
+// It pulses rather than running continuously, because a continuous drive makes
+// every panel converge on the same steady interference pattern: they would all
+// look alike no matter how far ahead the fast ones were. Pulsed, each panel
+// shows an expanding ring whose radius is a direct readout of how many steps
+// it has taken.
+//
+// Everything here depends only on the step count, so the backends stay
+// comparable: at equal steps they are driven identically.
+type driver struct {
+	idx        int
+	freq, ampl float32
+	// burst steps of emission out of every period; period <= 0 drives
+	// continuously.
+	burst, period int
 }
 
 // Default simulation constants. c2 is comfortably inside the 2D stability
@@ -55,7 +81,7 @@ type Wave struct {
 // unattended run still settles instead of ringing forever.
 const (
 	defaultC2   = 0.4
-	defaultDamp = 0.9995
+	defaultDamp = 0.9998
 )
 
 // NewWave allocates a w*h pond. Dimensions below 3 leave nothing to step, so
@@ -79,13 +105,26 @@ func (s *Wave) Steps() int { return s.steps }
 // Field exposes the current field, for tests and for rendering.
 func (s *Wave) Field() []float32 { return s.cur }
 
-// Reset clears the pond back to flat water.
+// Reset clears the pond back to flat water, keeping the drivers.
 func (s *Wave) Reset() {
 	clear(s.cur)
 	clear(s.prev)
 	clear(s.next)
 
 	s.steps = 0
+}
+
+// Drive adds a pulsed oscillating source at (x, y). freq is in cycles per
+// step, so the wavelength it radiates follows from freq and the Courant
+// number; burst and period set the emission gate.
+func (s *Wave) Drive(x, y int, freq, ampl float32, burst, period int) {
+	if x < 1 || y < 1 || x >= s.W-1 || y >= s.H-1 {
+		return
+	}
+
+	s.drivers = append(s.drivers, driver{
+		idx: y*s.W + x, freq: freq, ampl: ampl, burst: burst, period: period,
+	})
 }
 
 // Poke drops a stone at (x, y): a smooth Gaussian bump added to the current
@@ -123,6 +162,14 @@ func (s *Wave) Step(b Backend, n int) int {
 	return n
 }
 
+// Render writes the current field into rgba, which must hold W*H pixels. The
+// colormap always runs on the fastest available backend and is never part of
+// the measurement -- every panel renders identically, so the comparison stays
+// about the stepper.
+func (s *Wave) Render(rgba []byte, scale float32) {
+	simd.Colormap(rgba, s.cur, scale)
+}
+
 func (s *Wave) stepOnce(b Backend) {
 	switch b {
 	case BackendSIMD:
@@ -139,12 +186,13 @@ func (s *Wave) stepOnce(b Backend) {
 	// becomes prev, and the old prev is reused as scratch for the next step.
 	s.prev, s.cur, s.next = s.cur, s.next, s.prev
 	s.steps++
-}
 
-// Render writes the current field into rgba, which must hold W*H pixels. The
-// colormap always runs on the fastest available backend and is never part of
-// the measurement -- every panel renders identically, so the comparison stays
-// about the stepper.
-func (s *Wave) Render(rgba []byte, scale float32) {
-	simd.Colormap(rgba, s.cur, scale)
+	for _, d := range s.drivers {
+		if d.period > 0 && s.steps%d.period >= d.burst {
+			continue
+		}
+
+		phase := 2 * math.Pi * float64(d.freq) * float64(s.steps)
+		s.cur[d.idx] += d.ampl * float32(math.Sin(phase))
+	}
 }
