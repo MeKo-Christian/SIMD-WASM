@@ -10,12 +10,17 @@ import (
 	"os"
 	"time"
 
+	"github.com/MeKo-Christian/simd-wasm/sim"
 	"github.com/MeKo-Christian/simd-wasm/simd"
 )
 
 const (
 	n     = 4096
 	iters = 2000
+
+	// The benchmark grid is big enough that one step dwarfs the trampoline
+	// crossing, and small enough that 2000 of them still finish promptly.
+	waveW, waveH = 512, 512
 )
 
 func main() {
@@ -64,9 +69,11 @@ func main() {
 
 	fmt.Println()
 
-	fmt.Printf("%-10s %12s %12s %8s\n", "kernel", "scalar", "simd", "speedup")
-	report("Dot", func() { sink = simd.ScalarDot(a, b) }, func() { sink = simd.Dot(a, b) })
-	report("Add", func() { simd.ScalarAdd(got, a, b) }, func() { simd.Add(got, a, b) })
+	ok = checkWave() && ok
+
+	fmt.Println()
+
+	benchmarks(a, b, got)
 
 	if !ok {
 		fmt.Fprintln(os.Stderr, "\nverification failed")
@@ -80,15 +87,48 @@ func main() {
 //nolint:unused // assigned, never read -- that is the point
 var sink float32
 
-func report(name string, scalar, vector func()) {
-	s, v := bench(scalar), bench(vector)
+// benchmarks times every kernel on all three backends. Reporting the
+// clang-scalar column alongside Go's is what separates the two effects the
+// headline number otherwise conflates: "vs C" is the SIMD win, "vs Go" also
+// counts clang's wasm codegen beating Go's.
+func benchmarks(a, b, scratch []float32) {
+	fmt.Printf("%-14s %12s %12s %12s %8s %8s\n",
+		"kernel", "Go", "C", "C + SIMD", "vs Go", "vs C")
 
-	speedup := "n/a"
-	if v > 0 {
-		speedup = fmt.Sprintf("%.2fx", float64(s)/float64(v))
+	report("Dot",
+		func() { sink = simd.ScalarDot(a, b) },
+		func() { sink = simd.CDot(a, b) },
+		func() { sink = simd.Dot(a, b) })
+	report("Add",
+		func() { simd.ScalarAdd(scratch, a, b) },
+		func() { simd.CAdd(scratch, a, b) },
+		func() { simd.Add(scratch, a, b) })
+
+	wave := make([]*sim.Wave, len(sim.Backends))
+	for i := range wave {
+		wave[i] = sim.NewWave(waveW, waveH)
+		wave[i].Poke(waveW/2, waveH/2, 1)
 	}
 
-	fmt.Printf("%-10s %12s %12s %8s\n", name, s, v, speedup)
+	report(fmt.Sprintf("Wave %dx%d", waveW, waveH),
+		func() { wave[0].Step(sim.BackendGo, 1) },
+		func() { wave[1].Step(sim.BackendC, 1) },
+		func() { wave[2].Step(sim.BackendSIMD, 1) })
+}
+
+func report(name string, goScalar, cScalar, vector func()) {
+	g, c, v := bench(goScalar), bench(cScalar), bench(vector)
+
+	fmt.Printf("%-14s %12s %12s %12s %8s %8s\n",
+		name, g, c, v, ratio(g, v), ratio(c, v))
+}
+
+func ratio(slow, fast time.Duration) string {
+	if fast <= 0 {
+		return "n/a"
+	}
+
+	return fmt.Sprintf("%.2fx", float64(slow)/float64(fast))
 }
 
 func bench(f func()) time.Duration {

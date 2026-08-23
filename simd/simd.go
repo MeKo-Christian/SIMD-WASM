@@ -10,7 +10,17 @@
 //
 // Build with -tags gosimd to use the kernels; without the tag you get the
 // pure-Go implementations and an ordinary, self-contained module.
+//
+// Two side modules are bound, not one: kernel.wasm (clang -msimd128) and
+// kernel-scalar.wasm (the same C source, no simd128). Having the clang-scalar
+// path in the same binary is what lets the demo separate the SIMD win from
+// clang's codegen advantage over Go's wasm backend.
 package simd
 
 // Enabled reports whether the SIMD kernels are linked in.
 func Enabled() bool { return enabled }
+
+// CEnabled reports whether the clang-scalar kernels are linked in. It tracks
+// Enabled today -- both modules are wired by the same build tag -- but the host
+// supplies them independently, so the demo asks about them separately.
+func CEnabled() bool { return enabled }

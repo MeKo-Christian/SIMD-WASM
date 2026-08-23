@@ -11,13 +11,24 @@ default:
 #################################
 
 # Build the SIMD kernel module (freestanding, imports Go's memory)
-kernel:
+kernel-simd:
     mkdir -p build
     clang --target=wasm32 -msimd128 -O3 -nostdlib -ffreestanding \
       -Wl,--no-entry -Wl,--import-memory \
       -o build/kernel.wasm kernel/kernel.c
 
-# Build the kernel and all three app variants
+# Build the same kernels without simd128 -- the honest scalar-C baseline, which
+# separates the SIMD win from clang's codegen advantage over Go's wasm backend
+kernel-scalar:
+    mkdir -p build
+    clang --target=wasm32 -O3 -nostdlib -ffreestanding \
+      -Wl,--no-entry -Wl,--import-memory \
+      -o build/kernel-scalar.wasm kernel/kernel.c
+
+# Build both kernel modules
+kernel: kernel-simd kernel-scalar
+
+# Build the kernels and all three app variants
 build: kernel
     GOOS=wasip1 GOARCH=wasm go build -tags gosimd -o build/app-simd.wasm ./
     GOOS=wasip1 GOARCH=wasm go build -o build/app-plain.wasm ./
@@ -54,8 +65,8 @@ site out="site": build
     set -euo pipefail
     rm -rf "{{ out }}"
     mkdir -p "{{ out }}"
-    cp host/index.html "{{ out }}/"
-    cp build/app-simd-js.wasm build/kernel.wasm "{{ out }}/"
+    cp host/index.html host/kernels.mjs "{{ out }}/"
+    cp build/app-simd-js.wasm build/kernel.wasm build/kernel-scalar.wasm "{{ out }}/"
     cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" "{{ out }}/"
     ls -l "{{ out }}"
 
@@ -104,6 +115,10 @@ verify: build
 
     grep -qa simd128 build/kernel.wasm \
       || { echo "kernel.wasm lacks the simd128 target feature"; exit 1; }
+
+    if grep -qa simd128 build/kernel-scalar.wasm; then
+      echo "kernel-scalar.wasm should be built without simd128"; exit 1
+    fi
 
     node host/run.mjs build/app-simd.wasm | tee "$out/simd.out"
     grep -q "SIMD kernels linked: true" "$out/simd.out"
