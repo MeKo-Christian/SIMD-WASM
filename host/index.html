@@ -252,10 +252,10 @@
   // Nothing on this page works without all three modules, so a load failure is
   // reported rather than left as a blank frame. The most likely cause is a
   // stale deployment missing kernel-scalar.wasm.
-  function fail(err) {
+  function fail(what, err) {
     const el = document.getElementById("error");
     el.hidden = false;
-    el.textContent = `Could not start the demo: ${err.message ?? err}`;
+    el.textContent = `Could not load ${what}: ${err.message ?? err}`;
     for (const sec of document.querySelectorAll("section[data-panel]")) {
       sec.hidden = true;
     }
@@ -283,15 +283,19 @@
       fetch("app-simd-js.wasm"),
       go.importObject,
     );
+  } catch (err) {
+    fail("app-simd-js.wasm", err);
+  }
 
-    for (const k of holders) {
+  for (const k of holders) {
+    try {
       const inst = await WebAssembly.instantiateStreaming(fetch(k.file), {
         env: { memory: app.instance.exports.mem },
       });
       k.holder.exports = inst.instance.exports;
+    } catch (err) {
+      fail(k.file, err);
     }
-  } catch (err) {
-    fail(err);
   }
 
   // Go blocks in select{} once it is up, so go.run() never resolves; it calls

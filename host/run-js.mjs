@@ -16,8 +16,17 @@ createRequire(import.meta.url)(join(goroot, "lib", "wasm", "wasm_exec.js"));
 
 const go = new Go();
 // wasm_exec.js only warns on a non-zero exit; make it fail the process.
+//
+// It also leaves the timer that services Go's scheduler armed. Once the program
+// has exited, letting that fire throws "Go program has already exited" and
+// takes the process down after a clean run, so drop the pending timeouts and
+// let Node's event loop drain instead of calling process.exit -- which could
+// truncate stdout when the output is piped.
 go.exit = (code) => {
-  if (code !== 0) process.exit(code);
+  process.exitCode = code;
+
+  for (const id of go._scheduledTimeouts.values()) clearTimeout(id);
+  go._scheduledTimeouts.clear();
 };
 const holders = KERNEL_MODULES.map(({ importName, file }) => {
   const { holder, imports } = kernelImports();

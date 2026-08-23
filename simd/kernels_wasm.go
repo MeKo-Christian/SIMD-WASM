@@ -59,19 +59,19 @@ func dot(a, b []float32, vector bool) float32 {
 		return 0
 	}
 
-	pa, pb := unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0])
+	ptrA, ptrB := unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0])
 
-	var r float32
+	var result float32
 	if vector {
-		r = kernelDotF32(pa, pb, int32(n))
+		result = kernelDotF32(ptrA, ptrB, int32(n))
 	} else {
-		r = cKernelDotF32(pa, pb, int32(n))
+		result = cKernelDotF32(ptrA, ptrB, int32(n))
 	}
 
 	runtime.KeepAlive(a)
 	runtime.KeepAlive(b)
 
-	return r
+	return result
 }
 
 // Add computes dst = a + b elementwise over min(len(dst), len(a), len(b)).
@@ -86,11 +86,11 @@ func addWith(dst, a, b []float32, vector bool) {
 		return
 	}
 
-	pd, pa, pb := unsafe.Pointer(&dst[0]), unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0])
+	ptrDst, ptrA, ptrB := unsafe.Pointer(&dst[0]), unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0])
 	if vector {
-		kernelAddF32(pd, pa, pb, int32(n))
+		kernelAddF32(ptrDst, ptrA, ptrB, int32(n))
 	} else {
-		cKernelAddF32(pd, pa, pb, int32(n))
+		cKernelAddF32(ptrDst, ptrA, ptrB, int32(n))
 	}
 
 	runtime.KeepAlive(dst)
@@ -115,11 +115,14 @@ func waveStep(next, cur, prev []float32, w, h int, c2, damp float32, vector bool
 		return
 	}
 
-	pn, pc, pp := unsafe.Pointer(&next[0]), unsafe.Pointer(&cur[0]), unsafe.Pointer(&prev[0])
+	ptrNext := unsafe.Pointer(&next[0])
+	ptrCur := unsafe.Pointer(&cur[0])
+	ptrPrev := unsafe.Pointer(&prev[0])
+
 	if vector {
-		kernelWaveStepF32(pn, pc, pp, int32(w), int32(h), c2, damp)
+		kernelWaveStepF32(ptrNext, ptrCur, ptrPrev, int32(w), int32(h), c2, damp)
 	} else {
-		cKernelWaveStepF32(pn, pc, pp, int32(w), int32(h), c2, damp)
+		cKernelWaveStepF32(ptrNext, ptrCur, ptrPrev, int32(w), int32(h), c2, damp)
 	}
 
 	runtime.KeepAlive(next)
@@ -143,11 +146,11 @@ func colormap(rgba []byte, field []float32, scale float32, vector bool) {
 		return
 	}
 
-	pr, pf := unsafe.Pointer(&rgba[0]), unsafe.Pointer(&field[0])
+	ptrRGBA, ptrField := unsafe.Pointer(&rgba[0]), unsafe.Pointer(&field[0])
 	if vector {
-		kernelColormapF32(pr, pf, int32(n), scale)
+		kernelColormapF32(ptrRGBA, ptrField, int32(n), scale)
 	} else {
-		cKernelColormapF32(pr, pf, int32(n), scale)
+		cKernelColormapF32(ptrRGBA, ptrField, int32(n), scale)
 	}
 
 	runtime.KeepAlive(rgba)

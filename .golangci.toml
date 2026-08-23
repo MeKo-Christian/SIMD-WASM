@@ -24,7 +24,7 @@ enable = ['gomodguard_v2', 'wsl_v5']
 # harder to read, not easier.
 ignore-names = [
   'n', 'x', 'y', 'p', 'a', 'b', 'i', 's', 'v', 'f', 'ok',
-  'w', 'h', 'c', 'g', 'o', 't', 'dx', 'dy', 'px', 'py', 'r2', 'up', 'dn', 'at',
+  'w', 'h', 'c', 'g', 'o', 't', 'dx', 'dy', 'px', 'py', 'r2', 'up', 'dn', 'at', 'c2', 'd',
 ]
 ignore-decls = ['w http.ResponseWriter', 'r *http.Request']
 
