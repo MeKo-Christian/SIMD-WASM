@@ -117,15 +117,22 @@ cmd/serve           static server for the browser demo
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` installs Go, clang, `wasm-ld` and `just`, then runs
-`just ci` on Ubuntu — the same recipe you run locally: formatting,
-`golangci-lint` and `go vet` both natively and under the wasm build tags (which
-is what checks the `//go:wasmimport` pointer rules), the native tests, a full
-build, and all three demo variants.
+`.github/workflows/test.yaml` fans out to one reusable workflow per concern —
+`test-format`, `test-lint`, `test-unit`, `test-build`, `test-demo` — so a
+failure names itself in the checks list instead of hiding inside one long job.
+Each of them installs its toolchain through the composite action in
+`.github/actions/setup` and then calls the same `just` recipes you run locally
+(`just check-formatted`, `just lint` / `lint-wasm`, `just vet` / `vet-wasm`,
+`just test`, `just build`, `just verify` and `just run-js`). Locally, `just ci`
+runs all of it in one shot.
 
-The demo exits non-zero when a check fails, so a wrong kernel breaks the
-build rather than printing `FAIL` into a green log. `just verify` additionally
-asserts that the kernel really carries the `simd128` target feature, that the tagged
+The `go vet` and `golangci-lint` runs happen twice, natively and under the wasm
+build tags, because the `//go:wasmimport` declarations — and the pointer rules
+that apply to them — only exist in the tagged build.
+
+The demos exit non-zero when a check fails, so a wrong kernel breaks the build
+rather than printing `FAIL` into a green log. `just verify` additionally asserts
+that the kernel really carries the `simd128` target feature, that the tagged
 build reports its kernels as linked, and that the untagged build contains no
 `gosimd` import at all.
 

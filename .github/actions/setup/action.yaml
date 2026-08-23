@@ -1,0 +1,48 @@
+name: setup
+description: Install the toolchain this repo builds and checks with.
+
+inputs:
+  clang:
+    description: Also install clang and wasm-ld, needed to build the kernel.
+    required: false
+    default: "false"
+  node:
+    description: Also install Node, needed to run the wasm demos.
+    required: false
+    default: "false"
+  deps:
+    description: Also install the formatters and linters (just setup-deps).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - uses: extractions/setup-just@v3
+
+    - if: inputs.node == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+
+    # clang supplies the wasm32 target, lld supplies wasm-ld.
+    - if: inputs.clang == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang lld
+
+    - if: inputs.deps == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y shellcheck
+        just setup-deps
+
+    - shell: bash
+      run: just tools

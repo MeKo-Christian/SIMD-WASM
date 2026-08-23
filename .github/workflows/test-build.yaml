@@ -1,0 +1,20 @@
+name: test-build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          clang: "true"
+
+      - name: Build the kernel and all app variants
+        run: just build

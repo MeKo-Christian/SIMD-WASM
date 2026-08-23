@@ -114,12 +114,22 @@ ci: check build verify run-js
 
 # Print the versions of every tool this repo needs
 tools:
-    go version
-    clang --version | head -1
-    wasm-ld --version
-    node --version
-    treefmt --version
-    golangci-lint --version
+    #!/usr/bin/env bash
+    set -uo pipefail
+    show() {
+      if command -v "$1" >/dev/null 2>&1; then
+        printf '%s\n' "$("$@" 2>&1 | head -1)"
+      else
+        echo "$1: not installed"
+      fi
+    }
+    show go version
+    show clang --version
+    show wasm-ld --version
+    show node --version
+    show treefmt --version
+    show golangci-lint --version
+    show shellcheck --version
 
 #################################
 # Setup

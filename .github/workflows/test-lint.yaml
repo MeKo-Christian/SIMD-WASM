@@ -1,0 +1,32 @@
+name: test-lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          deps: "true"
+
+      - name: Lint
+        run: just lint
+
+      # The //go:wasmimport declarations only exist under the wasm build tags,
+      # so they are invisible to the native run above.
+      - name: Lint (wasip1, gosimd)
+        run: just lint-wasm
+
+      - name: go vet
+        run: just vet
+
+      # This is what checks the //go:wasmimport pointer rules.
+      - name: go vet (wasip1, gosimd)
+        run: just vet-wasm

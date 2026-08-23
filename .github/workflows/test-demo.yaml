@@ -1,0 +1,29 @@
+name: test-demo
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          clang: "true"
+          node: "true"
+
+      # Asserts the kernel really carries simd128, that the tagged build
+      # reports its kernels as linked, that the untagged one does not, and
+      # that it imports no gosimd module. The demos exit non-zero on a wrong
+      # result, so a broken kernel fails the build instead of printing FAIL
+      # into a green log.
+      - name: Verify the built modules
+        run: just verify
+
+      - name: Run the GOOS=js demo under Node
+        run: just run-js
