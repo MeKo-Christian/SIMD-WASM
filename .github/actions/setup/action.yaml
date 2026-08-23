@@ -25,10 +25,12 @@ runs:
 
     - uses: extractions/setup-just@v3
 
+    # Node 24, not 22: from 22.21.1 on, a V8 concurrent-marking bug segfaults
+    # the wasip1 demo once Go's linear memory grows. 22.21.0 and 24.x are fine.
     - if: inputs.node == 'true'
       uses: actions/setup-node@v4
       with:
-        node-version: "22"
+        node-version: "24"
 
     # clang supplies the wasm32 target, lld supplies wasm-ld.
     - if: inputs.clang == 'true'

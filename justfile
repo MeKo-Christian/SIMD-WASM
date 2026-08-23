@@ -156,7 +156,7 @@ setup-deps:
     command -v gci >/dev/null 2>&1 || { echo "Installing gci..."; go install github.com/daixiang0/gci@latest; }
     command -v shfmt >/dev/null 2>&1 || { echo "Installing shfmt..."; go install mvdan.cc/sh/v3/cmd/shfmt@latest; }
     command -v prettier >/dev/null 2>&1 || { echo "Installing prettier..."; npm install -g prettier; }
-    command -v golangci-lint >/dev/null 2>&1 || { echo "Installing golangci-lint..."; curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.6.2; }
+    command -v golangci-lint >/dev/null 2>&1 || { echo "Installing golangci-lint..."; curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2; }
     command -v shellcheck >/dev/null 2>&1 || echo "WARNING: shellcheck not found. Install it with your package manager."
 
     echo "Done. Make sure $(go env GOPATH)/bin is on your PATH."

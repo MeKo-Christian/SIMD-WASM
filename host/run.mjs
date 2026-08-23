@@ -15,6 +15,18 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const appPath = process.argv[2] ?? join(root, "build", "app-simd.wasm");
 const withKernel = !process.argv.includes("--no-kernel");
 
+// Node 22.21.1 through at least 22.23.2 segfault partway through this demo:
+// a V8 concurrent-marking bug fires once Go's linear memory grows under
+// node:wasi. 22.21.0 and every 24.x are fine, and --single-threaded-gc also
+// avoids it. Warn, because a bare SIGSEGV explains nothing.
+const [major, minor, patch] = process.versions.node.split(".").map(Number);
+if (major === 22 && (minor > 21 || (minor === 21 && patch >= 1))) {
+  console.error(
+    `warning: Node ${process.versions.node} is known to crash on this demo ` +
+      `(V8 concurrent-marking bug); use Node 24.x or 22.21.0`,
+  );
+}
+
 const wasi = new WASI({ version: "preview1", args: ["app"], env: process.env });
 
 let kernel = null; // filled in after the Go instance exists

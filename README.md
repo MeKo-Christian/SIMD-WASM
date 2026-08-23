@@ -63,8 +63,15 @@ because it is the same `Memory` object); clean `go vet` including the
 
 ## Build and run
 
-Requires Go 1.26, clang with the wasm32 target, `wasm-ld`, Node ≥ 20 and
+Requires Go 1.26, clang with the wasm32 target, `wasm-ld`, Node and
 [`just`](https://github.com/casey/just).
+
+Use Node 24.x (or 22.21.0). **Node 22.21.1 through at least 22.23.2 segfault**
+partway through the wasip1 demo: a V8 concurrent-marking bug fires once Go's
+linear memory grows under `node:wasi`. It is not specific to this code — the
+pure-Go build crashes the same way with no kernel loaded — and it does not
+affect the `GOOS=js` path or the browser. `host/run.mjs` warns when it sees an
+affected version.
 
 ```sh
 just build       # kernel + all three app builds
