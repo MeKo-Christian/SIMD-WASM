@@ -24,6 +24,19 @@ const (
 )
 
 func main() {
+	// The browser page passes -interactive through go.argv; Node does not, so
+	// one binary both gates CI on the verification below and drives the page.
+	if wantsInteractive() {
+		if !interactiveSupported {
+			fmt.Fprintln(os.Stderr, "-interactive requires the GOOS=js build")
+			os.Exit(2)
+		}
+
+		serveInteractive() // blocks
+
+		return
+	}
+
 	fmt.Printf("SIMD kernels linked: %v\n\n", simd.Enabled())
 
 	a := make([]float32, n)
@@ -142,4 +155,14 @@ func bench(f func()) time.Duration {
 	}
 
 	return time.Since(start) / iters
+}
+
+func wantsInteractive() bool {
+	for _, a := range os.Args[1:] {
+		if a == "-interactive" {
+			return true
+		}
+	}
+
+	return false
 }
