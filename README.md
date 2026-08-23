@@ -4,6 +4,11 @@ A proof of concept: real WebAssembly SIMD (`v128`) instructions driven from Go
 code built by the **stock Go toolchain** — no TinyGo, no compiler fork, no
 binary rewriting.
 
+### ▶ [Try the live demo](https://meko-christian.github.io/SIMD-WASM/)
+
+Three wave-equation ponds running side by side in your browser — pure Go, C
+scalar, and C SIMD — over the same grid, from the same initial state.
+
 ## The problem
 
 The standard Go compiler cannot produce wasm SIMD, by any route:
@@ -157,6 +162,8 @@ cmd/serve           static server for the browser demo
   fall back by simply not wiring the import.
 
 ## The demo on the web
+
+**Live at <https://meko-christian.github.io/SIMD-WASM/>.**
 
 The page runs a **2D wave equation** — a pond you can drop stones into. Each
 step applies the 5-point discrete Laplacian and a leapfrog update over a
