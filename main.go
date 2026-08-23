@@ -23,6 +23,7 @@ func main() {
 
 	a := make([]float32, n)
 	b := make([]float32, n)
+
 	for i := range a {
 		a[i] = rand.Float32()*2 - 1
 		b[i] = rand.Float32()*2 - 1
@@ -43,6 +44,7 @@ func main() {
 	simd.ScalarAdd(want, a, b)
 	simd.Add(got, a, b)
 	addOK := true
+
 	for i := range want {
 		if got[i] != want[i] {
 			fmt.Printf("FAIL Add at %d: got %v want %v\n", i, got[i], want[i])
@@ -50,13 +52,16 @@ func main() {
 			break
 		}
 	}
+
 	ok = ok && addOK
 	if addOK {
 		fmt.Printf("ok   Add  %d elements identical\n", n)
 	}
+
 	fmt.Println()
 
 	ok = checkAfterGrowth() && ok
+
 	fmt.Println()
 
 	fmt.Printf("%-10s %12s %12s %8s\n", "kernel", "scalar", "simd", "speedup")
@@ -69,24 +74,32 @@ func main() {
 	}
 }
 
+// sink is written by the benchmarked closures so the compiler cannot discard
+// the work being measured.
+//
+//nolint:unused // assigned, never read -- that is the point
 var sink float32
 
 func report(name string, scalar, vector func()) {
 	s, v := bench(scalar), bench(vector)
+
 	speedup := "n/a"
 	if v > 0 {
 		speedup = fmt.Sprintf("%.2fx", float64(s)/float64(v))
 	}
+
 	fmt.Printf("%-10s %12s %12s %8s\n", name, s, v, speedup)
 }
 
 func bench(f func()) time.Duration {
-	for i := 0; i < iters/10; i++ { // warm up
+	for range iters / 10 { // warm up
 		f()
 	}
 	start := time.Now()
-	for i := 0; i < iters; i++ {
+
+	for range iters {
 		f()
 	}
+
 	return time.Since(start) / iters
 }

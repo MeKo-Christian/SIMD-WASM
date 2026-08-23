@@ -8,11 +8,11 @@ binary rewriting.
 
 The standard Go compiler cannot produce wasm SIMD, by any route:
 
-| Route | Status (Go 1.26) |
-|---|---|
+| Route                     | Status (Go 1.26)                                               |
+| ------------------------- | -------------------------------------------------------------- |
 | `simd` intrinsics package | `src/simd/archsimd` is `//go:build goexperiment.simd && amd64` |
-| Auto-vectorization | The wasm backend does not vectorize |
-| Hand-written assembly | `cmd/internal/obj/wasm` has no `0xFD` / `v128` opcodes at all |
+| Auto-vectorization        | The wasm backend does not vectorize                            |
+| Hand-written assembly     | `cmd/internal/obj/wasm` has no `0xFD` / `v128` opcodes at all  |
 
 So the trick is to stop asking the Go compiler for SIMD.
 
@@ -47,38 +47,46 @@ see `host/run.mjs`.
 
 Measured here on `wasip1` under Node, n=4096 float32, 2000 iterations:
 
-| kernel | scalar Go | SIMD | speedup |
-|---|---|---|---|
-| `Dot` | 5.04 µs | 1.59 µs | **9.98×** |
-| `Add` | 4.63 µs | 0.82 µs | **11.37×** |
+| kernel | scalar Go | SIMD    | speedup    |
+| ------ | --------- | ------- | ---------- |
+| `Dot`  | 5.04 µs   | 1.59 µs | **9.98×**  |
+| `Add`  | 4.63 µs   | 0.82 µs | **11.37×** |
 
-Above 4× because wasm SIMD is 128-bit (4× on f32) *and* Go's scalar wasm
+Above 4× because wasm SIMD is 128-bit (4× on f32) _and_ Go's scalar wasm
 codegen is weak — bounds checks and no unrolling. Don't expect this ratio
 against well-optimized scalar code on other targets.
 
 Verified: identical results vs. the pure-Go reference; correct after forcing
-~64 MiB of Go heap growth *after* the kernel was bound (growth is shared,
+~64 MiB of Go heap growth _after_ the kernel was bound (growth is shared,
 because it is the same `Memory` object); clean `go vet` including the
 `wasmimport` pointer checks; and running in real Chrome, not just Node.
 
 ## Build and run
 
-Requires Go 1.26, clang with the wasm32 target, `wasm-ld`, and Node ≥ 20.
+Requires Go 1.26, clang with the wasm32 target, `wasm-ld`, Node ≥ 20 and
+[`just`](https://github.com/casey/just).
 
 ```sh
-./build.sh                                  # kernel + all three app builds
-node host/run.mjs build/app-simd.wasm       # wasip1, SIMD
-node host/run.mjs build/app-plain.wasm --no-kernel   # wasip1, pure-Go fallback
-node host/run-js.mjs                        # GOOS=js under Node
-go run ./cmd/serve                          # browser demo on :8080
-go test ./simd/                             # native tests of the fallback path
+just build       # kernel + all three app builds
+just run         # wasip1, SIMD
+just run-plain   # wasip1, pure-Go fallback
+just run-js      # GOOS=js under Node
+just serve       # browser demo on :8080
+just test        # native tests of the fallback path
+just verify      # assert the built modules are what they claim to be
+just             # every recipe, with descriptions
 ```
+
+`just check` runs the static checks: formatting, `golangci-lint` natively and
+under the wasm build tags, `go vet` both ways, and the tests. Formatting is
+[treefmt](https://github.com/numtide/treefmt)-driven (`just fmt`); `just
+setup-deps` installs the formatters and linters it needs.
 
 ## Layout
 
 ```
 kernel/kernel.c     SIMD kernels (wasm_simd128.h intrinsics)
-kernel/build.sh     clang --target=wasm32 -msimd128 -Wl,--import-memory
+justfile            build recipes: clang --target=wasm32 -msimd128, go build
 simd/               Go API: wasmimport kernels + pure-Go fallback
 host/run.mjs        wasip1 host wiring (Node WASI)
 host/run-js.mjs     GOOS=js host wiring (wasm_exec.js)
@@ -109,14 +117,15 @@ cmd/serve           static server for the browser demo
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` installs Go, clang and `wasm-ld`, then runs the
-whole thing on Ubuntu: gofmt, `go vet` both natively and under the wasm build
-tags (which is what checks the `//go:wasmimport` pointer rules), the native
-tests, a full build, and all three demo variants.
+`.github/workflows/ci.yml` installs Go, clang, `wasm-ld` and `just`, then runs
+`just ci` on Ubuntu — the same recipe you run locally: formatting,
+`golangci-lint` and `go vet` both natively and under the wasm build tags (which
+is what checks the `//go:wasmimport` pointer rules), the native tests, a full
+build, and all three demo variants.
 
 The demo exits non-zero when a check fails, so a wrong kernel breaks the
-build rather than printing `FAIL` into a green log. CI additionally asserts
-that the kernel really carries the `simd128` target feature, that the tagged
+build rather than printing `FAIL` into a green log. `just verify` additionally
+asserts that the kernel really carries the `simd128` target feature, that the tagged
 build reports its kernels as linked, and that the untagged build contains no
 `gosimd` import at all.
 

@@ -1,0 +1,52 @@
+# run with treefmt --allow-missing-formatter
+
+[global]
+excludes = [
+  "go.mod",
+  "go.sum",
+  "LICENSE",
+  "build/**",
+  "**/.gitignore",
+  "**/*.wasm",
+]
+
+### Go
+
+[formatter.gofumpt]
+command = "gofumpt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.gci]
+command = "gci"
+options = ["-w"]
+includes = ["*.go"]
+priority = 1        # run after gofumpt
+
+### Misc
+
+[formatter.prettier]
+command = "prettier"
+options = ["-w"]
+includes = [
+  "*.md",
+  "*.js",
+  "*.mjs",
+  "*.html",
+  "*.css",
+  "*.json",
+  "*.yaml",
+  "*.yml",
+]
+
+### Shell
+
+[formatter.shellcheck]
+command = "shellcheck"
+includes = ["*.sh"]
+
+[formatter.shfmt]
+command = "shfmt"
+options = ["-s", "-w"]
+includes = ["*.sh"]
+priority = 1        # run after shellcheck

@@ -13,9 +13,10 @@ import (
 // its view stays valid -- this is what makes the shared-memory design safe.
 func checkAfterGrowth() bool {
 	ballast := make([][]float32, 0, 64)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		ballast = append(ballast, make([]float32, 1<<18)) // ~64 MiB total
 	}
+
 	a := ballast[len(ballast)-1]
 	for i := range a {
 		a[i] = 1
@@ -23,6 +24,7 @@ func checkAfterGrowth() bool {
 	got, want := simd.Dot(a, a), simd.ScalarDot(a, a)
 	ok := math.Abs(float64(got-want)) <= float64(want)*1e-5
 	fmt.Printf("%s Dot after ~64MiB memory growth: %v ~= %v\n", status(ok), got, want)
+
 	return ok
 }
 
@@ -30,5 +32,6 @@ func status(ok bool) string {
 	if ok {
 		return "ok  "
 	}
+
 	return "FAIL"
 }

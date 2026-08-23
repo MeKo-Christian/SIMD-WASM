@@ -24,6 +24,7 @@ func Dot(a, b []float32) float32 {
 	r := kernelDotF32(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int32(n))
 	runtime.KeepAlive(a)
 	runtime.KeepAlive(b)
+
 	return r
 }
 
@@ -33,6 +34,7 @@ func Add(dst, a, b []float32) {
 	if n == 0 {
 		return
 	}
+
 	kernelAddF32(unsafe.Pointer(&dst[0]), unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int32(n))
 	runtime.KeepAlive(dst)
 	runtime.KeepAlive(a)

@@ -1,19 +1,37 @@
 <!doctype html>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <title>Go + WebAssembly SIMD</title>
 <style>
-  body { font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem auto; max-width: 46rem; }
-  pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; white-space: pre-wrap; }
-  h1 { font-size: 1.2rem; }
+  body {
+    font:
+      14px/1.6 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
+    margin: 2rem auto;
+    max-width: 46rem;
+  }
+  pre {
+    background: #f5f5f5;
+    padding: 1rem;
+    border-radius: 6px;
+    white-space: pre-wrap;
+  }
+  h1 {
+    font-size: 1.2rem;
+  }
 </style>
 <h1>SIMD kernels called from standard-Go WebAssembly</h1>
 <pre id="out">running…</pre>
 <script src="wasm_exec.js"></script>
 <script type="module">
-  const out = document.getElementById('out');
-  out.textContent = '';
+  const out = document.getElementById("out");
+  out.textContent = "";
   const log = console.log;
-  console.log = (...a) => { out.textContent += a.join(' ') + '\n'; log(...a); };
+  console.log = (...a) => {
+    out.textContent += a.join(" ") + "\n";
+    log(...a);
+  };
 
   const go = new Go();
   let kernel = null;
@@ -24,10 +42,13 @@
     add_f32: (dst, a, b, n) => kernel.add_f32(dst, a, b, n),
   };
 
-  const app = await WebAssembly.instantiateStreaming(fetch('app-simd-js.wasm'), go.importObject);
+  const app = await WebAssembly.instantiateStreaming(
+    fetch("app-simd-js.wasm"),
+    go.importObject,
+  );
   // The kernel module imports Go's own linear memory, so it reads and writes
   // Go slices in place -- no copying across the boundary.
-  const k = await WebAssembly.instantiateStreaming(fetch('kernel.wasm'), {
+  const k = await WebAssembly.instantiateStreaming(fetch("kernel.wasm"), {
     env: { memory: app.instance.exports.mem },
   });
   kernel = k.instance.exports;

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
@@ -10,10 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func main() {
 	addr := flag.String("addr", "localhost:8080", "listen address")
+
 	flag.Parse()
 
 	root, err := os.Getwd()
@@ -22,7 +25,7 @@ func main() {
 	}
 	build := filepath.Join(root, "build")
 
-	goroot, err := exec.Command("go", "env", "GOROOT").Output()
+	goroot, err := exec.CommandContext(context.Background(), "go", "env", "GOROOT").Output()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,9 +41,16 @@ func main() {
 			http.ServeFile(w, r, filepath.Join(root, "host", "index.html"))
 			return
 		}
+
 		http.FileServer(http.Dir(build)).ServeHTTP(w, r)
 	})
 
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
 	log.Printf("serving http://%s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, mux))
+	log.Fatal(srv.ListenAndServe())
 }
